@@ -1,0 +1,102 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: workflow-orchestrator
+  
+  # PostgreSQL Database configuration
+  datasource:
+    url: jdbc:postgresql://localhost:5432/orchestrator_db
+    driver-class-name: org.postgresql.Driver
+    username: orchestrator_user
+    password: orchestrator_password
+    hikari:
+      maximum-pool-size: 20
+      minimum-idle: 5
+      connection-timeout: 20000
+      idle-timeout: 300000
+      max-lifetime: 1200000
+  
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    show-sql: false
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        format_sql: true
+        jdbc:
+          time_zone: UTC
+    open-in-view: false
+  
+  # Test profile configuration
+  profiles:
+    active: dev
+
+---
+# Development profile
+spring:
+  config:
+    activate:
+      on-profile: dev
+  jpa:
+    show-sql: true
+    hibernate:
+      ddl-auto: update
+
+---
+# Test profile 
+spring:
+  config:
+    activate:
+      on-profile: test
+  datasource:
+    url: jdbc:h2:mem:testdb
+    driver-class-name: org.h2.Driver
+    username: sa
+    password: 
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+  h2:
+    console:
+      enabled: true
+
+# Camunda Configuration
+camunda:
+  bpm:
+    admin-user:
+      id: admin
+      password: admin
+      firstName: Admin
+      lastName: User
+      email: admin@company.com
+    filter:
+      create: All tasks
+    webapp:
+      index-redirect-enabled: true
+    job-execution:
+      enabled: true
+    metrics:
+      enabled: true
+    history-level: full
+
+# Logging configuration
+logging:
+  level:
+    com.company.orchestrator: DEBUG
+    org.camunda: INFO
+    org.springframework.web: DEBUG
+  pattern:
+    console: "%d{HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n"
+
+# Management endpoints
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,camunda
+  endpoint:
+    health:
+      show-details: always

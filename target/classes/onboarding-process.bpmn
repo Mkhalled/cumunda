@@ -1,0 +1,396 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:dc="http://www.omg.org/spec/DD/20100524/DC" xmlns:camunda="http://camunda.org/schema/1.0/bpmn" xmlns:di="http://www.omg.org/spec/DD/20100524/DI" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" id="Definitions_1" targetNamespace="http://bpmn.io/schema/bpmn" exporter="Camunda Modeler" exporterVersion="5.10.0">
+  <bpmn:process id="form-submission-workflow" name="Form Submission Workflow" isExecutable="true" camunda:versionTag="1.0">
+    
+    <!-- Start Event -->
+    <bpmn:startEvent id="form-submitted" name="Form submitted and validated">
+      <bpmn:outgoing>flow-to-simulator-api</bpmn:outgoing>
+    </bpmn:startEvent>
+    
+    <!-- Step 1: Send data to external simulator API -->
+    <bpmn:serviceTask id="send-to-simulator" name="Send form data to external simulator API" camunda:delegateExpression="${simulatorApiDelegate}">
+      <bpmn:incoming>flow-to-simulator-api</bpmn:incoming>
+      <bpmn:outgoing>flow-to-simulator-gateway</bpmn:outgoing>
+    </bpmn:serviceTask>
+    
+    <!-- Step 2: Exclusive Gateway based on simulator result -->
+    <bpmn:exclusiveGateway id="simulator-result-gateway" name="Simulator Result Decision">
+      <bpmn:incoming>flow-to-simulator-gateway</bpmn:incoming>
+      <bpmn:outgoing>flow-to-specific-tariff</bpmn:outgoing>
+      <bpmn:outgoing>flow-to-standard-tariff</bpmn:outgoing>
+    </bpmn:exclusiveGateway>
+    
+    <!-- Path 1: CA applies specific tariff conditions -->
+    <bpmn:userTask id="apply-specific-tariff" name="CA applies specific tariff conditions" camunda:assignee="ca-agent">
+      <bpmn:incoming>flow-to-specific-tariff</bpmn:incoming>
+      <bpmn:outgoing>flow-from-specific-tariff</bpmn:outgoing>
+    </bpmn:userTask>
+    
+    <!-- Path 2: CA applies standard tariff conditions -->
+    <bpmn:userTask id="apply-standard-tariff" name="CA applies standard tariff conditions" camunda:assignee="ca-agent">
+      <bpmn:incoming>flow-to-standard-tariff</bpmn:incoming>
+      <bpmn:outgoing>flow-from-standard-tariff</bpmn:outgoing>
+    </bpmn:userTask>
+    
+    <!-- Gateway to join tariff paths -->
+    <bpmn:exclusiveGateway id="tariff-join-gateway">
+      <bpmn:incoming>flow-from-specific-tariff</bpmn:incoming>
+      <bpmn:incoming>flow-from-standard-tariff</bpmn:incoming>
+      <bpmn:outgoing>flow-to-client-choice</bpmn:outgoing>
+    </bpmn:exclusiveGateway>
+    
+    <!-- Client choice gateway -->
+    <bpmn:exclusiveGateway id="client-choice-gateway" name="Client Choice: Contract or Quote?">
+      <bpmn:incoming>flow-to-client-choice</bpmn:incoming>
+      <bpmn:outgoing>flow-to-profitability-check</bpmn:outgoing>
+      <bpmn:outgoing>flow-to-quote-proposal</bpmn:outgoing>
+    </bpmn:exclusiveGateway>
+    
+    <!-- Optional Profitability Simulator -->
+    <bpmn:serviceTask id="profitability-simulator" name="Profitability Simulator" camunda:delegateExpression="${profitabilitySimulatorDelegate}">
+      <bpmn:incoming>flow-to-profitability-check</bpmn:incoming>
+      <bpmn:outgoing>flow-to-contract-generation</bpmn:outgoing>
+    </bpmn:serviceTask>
+    
+    <!-- Quote Path: CA proposes a quote -->
+    <bpmn:userTask id="propose-quote" name="CA proposes a quote" camunda:assignee="ca-agent">
+      <bpmn:incoming>flow-to-quote-proposal</bpmn:incoming>
+      <bpmn:incoming>flow-quote-modification-loop</bpmn:incoming>
+      <bpmn:outgoing>flow-to-quote-decision</bpmn:outgoing>
+    </bpmn:userTask>
+    
+    <!-- Quote modification gateway -->
+    <bpmn:exclusiveGateway id="quote-modification-gateway" name="Client wants modifications?">
+      <bpmn:incoming>flow-to-quote-decision</bpmn:incoming>
+      <bpmn:outgoing>flow-quote-modification-loop</bpmn:outgoing>
+      <bpmn:outgoing>flow-to-quote-upload</bpmn:outgoing>
+    </bpmn:exclusiveGateway>
+    
+    <!-- Upload quote to E-Sign -->
+    <bpmn:serviceTask id="upload-quote-esign" name="CA uploads quote to E-Sign" camunda:delegateExpression="${eSignUploadDelegate}">
+      <bpmn:incoming>flow-to-quote-upload</bpmn:incoming>
+      <bpmn:outgoing>flow-to-quote-signing</bpmn:outgoing>
+    </bpmn:serviceTask>
+    
+    <!-- Client signs quote -->
+    <bpmn:userTask id="client-signs-quote" name="Client signs the quote via E-Sign" camunda:assignee="client">
+      <bpmn:incoming>flow-to-quote-signing</bpmn:incoming>
+      <bpmn:outgoing>flow-to-quote-archiving</bpmn:outgoing>
+    </bpmn:userTask>
+    
+    <!-- Archive quote to Vision -->
+    <bpmn:serviceTask id="archive-quote-vision" name="CA uploads quote to Vision for archiving" camunda:delegateExpression="${visionArchiveDelegate}">
+      <bpmn:incoming>flow-to-quote-archiving</bpmn:incoming>
+      <bpmn:outgoing>flow-quote-to-contract</bpmn:outgoing>
+    </bpmn:serviceTask>
+    
+    <!-- Contract Generation -->
+    <bpmn:serviceTask id="generate-contract" name="CA generates the contract" camunda:delegateExpression="${contractGenerationDelegate}">
+      <bpmn:incoming>flow-to-contract-generation</bpmn:incoming>
+      <bpmn:incoming>flow-quote-to-contract</bpmn:incoming>
+      <bpmn:outgoing>flow-to-contract-signing</bpmn:outgoing>
+    </bpmn:serviceTask>
+    
+    <!-- Client signs contract -->
+    <bpmn:userTask id="client-signs-contract" name="Client signs contract via E-Sign" camunda:assignee="client">
+      <bpmn:incoming>flow-to-contract-signing</bpmn:incoming>
+      <bpmn:outgoing>flow-to-contract-archiving</bpmn:outgoing>
+    </bpmn:userTask>
+    
+    <!-- Archive contract to Vision -->
+    <bpmn:serviceTask id="archive-contract-vision" name="CA uploads contract to Vision for archiving" camunda:delegateExpression="${visionArchiveDelegate}">
+      <bpmn:incoming>flow-to-contract-archiving</bpmn:incoming>
+      <bpmn:outgoing>flow-to-end</bpmn:outgoing>
+    </bpmn:serviceTask>
+    
+    <!-- End Event -->
+    <bpmn:endEvent id="contract-signed-archived" name="Contract signed and archived">
+      <bpmn:incoming>flow-to-end</bpmn:incoming>
+    </bpmn:endEvent>
+    
+    <!-- Sequence Flows -->
+    <bpmn:sequenceFlow id="flow-to-simulator-api" sourceRef="form-submitted" targetRef="send-to-simulator" />
+    <bpmn:sequenceFlow id="flow-to-simulator-gateway" sourceRef="send-to-simulator" targetRef="simulator-result-gateway" />
+    
+    <bpmn:sequenceFlow id="flow-to-specific-tariff" sourceRef="simulator-result-gateway" targetRef="apply-specific-tariff" name="Specific conditions required">
+      <bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">${simulatorResult == 'SPECIFIC'}</bpmn:conditionExpression>
+    </bpmn:sequenceFlow>
+    
+    <bpmn:sequenceFlow id="flow-to-standard-tariff" sourceRef="simulator-result-gateway" targetRef="apply-standard-tariff" name="Standard conditions">
+      <bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">${simulatorResult == 'STANDARD'}</bpmn:conditionExpression>
+    </bpmn:sequenceFlow>
+    
+    <bpmn:sequenceFlow id="flow-from-specific-tariff" sourceRef="apply-specific-tariff" targetRef="tariff-join-gateway" />
+    <bpmn:sequenceFlow id="flow-from-standard-tariff" sourceRef="apply-standard-tariff" targetRef="tariff-join-gateway" />
+    <bpmn:sequenceFlow id="flow-to-client-choice" sourceRef="tariff-join-gateway" targetRef="client-choice-gateway" />
+    
+    <bpmn:sequenceFlow id="flow-to-profitability-check" sourceRef="client-choice-gateway" targetRef="profitability-simulator" name="Direct to contract">
+      <bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">${clientChoice == 'CONTRACT'}</bpmn:conditionExpression>
+    </bpmn:sequenceFlow>
+    
+    <bpmn:sequenceFlow id="flow-to-quote-proposal" sourceRef="client-choice-gateway" targetRef="propose-quote" name="Client wants quote">
+      <bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">${clientChoice == 'QUOTE'}</bpmn:conditionExpression>
+    </bpmn:sequenceFlow>
+    
+    <bpmn:sequenceFlow id="flow-to-contract-generation" sourceRef="profitability-simulator" targetRef="generate-contract" />
+    <bpmn:sequenceFlow id="flow-to-quote-decision" sourceRef="propose-quote" targetRef="quote-modification-gateway" />
+    
+    <bpmn:sequenceFlow id="flow-quote-modification-loop" sourceRef="quote-modification-gateway" targetRef="propose-quote" name="Modifications needed">
+      <bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">${quoteModifications == true}</bpmn:conditionExpression>
+    </bpmn:sequenceFlow>
+    
+    <bpmn:sequenceFlow id="flow-to-quote-upload" sourceRef="quote-modification-gateway" targetRef="upload-quote-esign" name="Quote approved">
+      <bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">${quoteModifications == false}</bpmn:conditionExpression>
+    </bpmn:sequenceFlow>
+    
+    <bpmn:sequenceFlow id="flow-to-quote-signing" sourceRef="upload-quote-esign" targetRef="client-signs-quote" />
+    <bpmn:sequenceFlow id="flow-to-quote-archiving" sourceRef="client-signs-quote" targetRef="archive-quote-vision" />
+    <bpmn:sequenceFlow id="flow-quote-to-contract" sourceRef="archive-quote-vision" targetRef="generate-contract" />
+    <bpmn:sequenceFlow id="flow-to-contract-signing" sourceRef="generate-contract" targetRef="client-signs-contract" />
+    <bpmn:sequenceFlow id="flow-to-contract-archiving" sourceRef="client-signs-contract" targetRef="archive-contract-vision" />
+    <bpmn:sequenceFlow id="flow-to-end" sourceRef="archive-contract-vision" targetRef="contract-signed-archived" />
+    
+  </bpmn:process>
+  
+  <!-- BPMN Diagram Information -->
+  <bpmndi:BPMNDiagram id="BPMNDiagram_1">
+    <bpmndi:BPMNPlane id="BPMNPlane_1" bpmnElement="form-submission-workflow">
+      
+      <!-- Start Event -->
+      <bpmndi:BPMNShape id="BPMNShape_form-submitted" bpmnElement="form-submitted">
+        <dc:Bounds x="152" y="232" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="132" y="275" width="76" height="27" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      
+      <!-- Send to Simulator API -->
+      <bpmndi:BPMNShape id="BPMNShape_send-to-simulator" bpmnElement="send-to-simulator">
+        <dc:Bounds x="240" y="210" width="100" height="80" />
+        <bpmndi:BPMNLabel />
+      </bpmndi:BPMNShape>
+      
+      <!-- Simulator Result Gateway -->
+      <bpmndi:BPMNShape id="BPMNShape_simulator-result-gateway" bpmnElement="simulator-result-gateway" isMarkerVisible="true">
+        <dc:Bounds x="395" y="225" width="50" height="50" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="383" y="195" width="74" height="27" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      
+      <!-- Apply Specific Tariff -->
+      <bpmndi:BPMNShape id="BPMNShape_apply-specific-tariff" bpmnElement="apply-specific-tariff">
+        <dc:Bounds x="500" y="120" width="100" height="80" />
+        <bpmndi:BPMNLabel />
+      </bpmndi:BPMNShape>
+      
+      <!-- Apply Standard Tariff -->
+      <bpmndi:BPMNShape id="BPMNShape_apply-standard-tariff" bpmnElement="apply-standard-tariff">
+        <dc:Bounds x="500" y="320" width="100" height="80" />
+        <bpmndi:BPMNLabel />
+      </bpmndi:BPMNShape>
+      
+      <!-- Tariff Join Gateway -->
+      <bpmndi:BPMNShape id="BPMNShape_tariff-join-gateway" bpmnElement="tariff-join-gateway" isMarkerVisible="true">
+        <dc:Bounds x="675" y="225" width="50" height="50" />
+      </bpmndi:BPMNShape>
+      
+      <!-- Client Choice Gateway -->
+      <bpmndi:BPMNShape id="BPMNShape_client-choice-gateway" bpmnElement="client-choice-gateway" isMarkerVisible="true">
+        <dc:Bounds x="775" y="225" width="50" height="50" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="763" y="195" width="74" height="27" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      
+      <!-- Profitability Simulator -->
+      <bpmndi:BPMNShape id="BPMNShape_profitability-simulator" bpmnElement="profitability-simulator">
+        <dc:Bounds x="880" y="120" width="100" height="80" />
+        <bpmndi:BPMNLabel />
+      </bpmndi:BPMNShape>
+      
+      <!-- Propose Quote -->
+      <bpmndi:BPMNShape id="BPMNShape_propose-quote" bpmnElement="propose-quote">
+        <dc:Bounds x="880" y="320" width="100" height="80" />
+        <bpmndi:BPMNLabel />
+      </bpmndi:BPMNShape>
+      
+      <!-- Quote Modification Gateway -->
+      <bpmndi:BPMNShape id="BPMNShape_quote-modification-gateway" bpmnElement="quote-modification-gateway" isMarkerVisible="true">
+        <dc:Bounds x="1035" y="335" width="50" height="50" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1095" y="346" width="74" height="27" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      
+      <!-- Upload Quote to E-Sign -->
+      <bpmndi:BPMNShape id="BPMNShape_upload-quote-esign" bpmnElement="upload-quote-esign">
+        <dc:Bounds x="1140" y="320" width="100" height="80" />
+        <bpmndi:BPMNLabel />
+      </bpmndi:BPMNShape>
+      
+      <!-- Client Signs Quote -->
+      <bpmndi:BPMNShape id="BPMNShape_client-signs-quote" bpmnElement="client-signs-quote">
+        <dc:Bounds x="1290" y="320" width="100" height="80" />
+        <bpmndi:BPMNLabel />
+      </bpmndi:BPMNShape>
+      
+      <!-- Archive Quote to Vision -->
+      <bpmndi:BPMNShape id="BPMNShape_archive-quote-vision" bpmnElement="archive-quote-vision">
+        <dc:Bounds x="1440" y="320" width="100" height="80" />
+        <bpmndi:BPMNLabel />
+      </bpmndi:BPMNShape>
+      
+      <!-- Generate Contract -->
+      <bpmndi:BPMNShape id="BPMNShape_generate-contract" bpmnElement="generate-contract">
+        <dc:Bounds x="1140" y="120" width="100" height="80" />
+        <bpmndi:BPMNLabel />
+      </bpmndi:BPMNShape>
+      
+      <!-- Client Signs Contract -->
+      <bpmndi:BPMNShape id="BPMNShape_client-signs-contract" bpmnElement="client-signs-contract">
+        <dc:Bounds x="1290" y="120" width="100" height="80" />
+        <bpmndi:BPMNLabel />
+      </bpmndi:BPMNShape>
+      
+      <!-- Archive Contract to Vision -->
+      <bpmndi:BPMNShape id="BPMNShape_archive-contract-vision" bpmnElement="archive-contract-vision">
+        <dc:Bounds x="1440" y="120" width="100" height="80" />
+        <bpmndi:BPMNLabel />
+      </bpmndi:BPMNShape>
+      
+      <!-- End Event -->
+      <bpmndi:BPMNShape id="BPMNShape_contract-signed-archived" bpmnElement="contract-signed-archived">
+        <dc:Bounds x="1592" y="142" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1574" y="185" width="72" height="27" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      
+      <!-- Sequence Flow Edges -->
+      <bpmndi:BPMNEdge id="BPMNEdge_flow-to-simulator-api" bpmnElement="flow-to-simulator-api">
+        <di:waypoint x="188" y="250" />
+        <di:waypoint x="240" y="250" />
+      </bpmndi:BPMNEdge>
+      
+      <bpmndi:BPMNEdge id="BPMNEdge_flow-to-simulator-gateway" bpmnElement="flow-to-simulator-gateway">
+        <di:waypoint x="340" y="250" />
+        <di:waypoint x="395" y="250" />
+      </bpmndi:BPMNEdge>
+      
+      <bpmndi:BPMNEdge id="BPMNEdge_flow-to-specific-tariff" bpmnElement="flow-to-specific-tariff">
+        <di:waypoint x="420" y="225" />
+        <di:waypoint x="420" y="160" />
+        <di:waypoint x="500" y="160" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="427" y="183" width="74" height="27" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      
+      <bpmndi:BPMNEdge id="BPMNEdge_flow-to-standard-tariff" bpmnElement="flow-to-standard-tariff">
+        <di:waypoint x="420" y="275" />
+        <di:waypoint x="420" y="360" />
+        <di:waypoint x="500" y="360" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="427" y="315" width="50" height="27" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      
+      <bpmndi:BPMNEdge id="BPMNEdge_flow-from-specific-tariff" bpmnElement="flow-from-specific-tariff">
+        <di:waypoint x="600" y="160" />
+        <di:waypoint x="700" y="160" />
+        <di:waypoint x="700" y="225" />
+      </bpmndi:BPMNEdge>
+      
+      <bpmndi:BPMNEdge id="BPMNEdge_flow-from-standard-tariff" bpmnElement="flow-from-standard-tariff">
+        <di:waypoint x="600" y="360" />
+        <di:waypoint x="700" y="360" />
+        <di:waypoint x="700" y="275" />
+      </bpmndi:BPMNEdge>
+      
+      <bpmndi:BPMNEdge id="BPMNEdge_flow-to-client-choice" bpmnElement="flow-to-client-choice">
+        <di:waypoint x="725" y="250" />
+        <di:waypoint x="775" y="250" />
+      </bpmndi:BPMNEdge>
+      
+      <bpmndi:BPMNEdge id="BPMNEdge_flow-to-profitability-check" bpmnElement="flow-to-profitability-check">
+        <di:waypoint x="800" y="225" />
+        <di:waypoint x="800" y="160" />
+        <di:waypoint x="880" y="160" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="807" y="183" width="66" height="27" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      
+      <bpmndi:BPMNEdge id="BPMNEdge_flow-to-quote-proposal" bpmnElement="flow-to-quote-proposal">
+        <di:waypoint x="800" y="275" />
+        <di:waypoint x="800" y="360" />
+        <di:waypoint x="880" y="360" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="807" y="315" width="66" height="27" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      
+      <bpmndi:BPMNEdge id="BPMNEdge_flow-to-contract-generation" bpmnElement="flow-to-contract-generation">
+        <di:waypoint x="980" y="160" />
+        <di:waypoint x="1140" y="160" />
+      </bpmndi:BPMNEdge>
+      
+      <bpmndi:BPMNEdge id="BPMNEdge_flow-to-quote-decision" bpmnElement="flow-to-quote-decision">
+        <di:waypoint x="980" y="360" />
+        <di:waypoint x="1035" y="360" />
+      </bpmndi:BPMNEdge>
+      
+      <bpmndi:BPMNEdge id="BPMNEdge_flow-quote-modification-loop" bpmnElement="flow-quote-modification-loop">
+        <di:waypoint x="1060" y="335" />
+        <di:waypoint x="1060" y="280" />
+        <di:waypoint x="930" y="280" />
+        <di:waypoint x="930" y="320" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="967" y="262" width="56" height="27" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      
+      <bpmndi:BPMNEdge id="BPMNEdge_flow-to-quote-upload" bpmnElement="flow-to-quote-upload">
+        <di:waypoint x="1085" y="360" />
+        <di:waypoint x="1140" y="360" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1100" y="342" width="74" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      
+      <bpmndi:BPMNEdge id="BPMNEdge_flow-to-quote-signing" bpmnElement="flow-to-quote-signing">
+        <di:waypoint x="1240" y="360" />
+        <di:waypoint x="1290" y="360" />
+      </bpmndi:BPMNEdge>
+      
+      <bpmndi:BPMNEdge id="BPMNEdge_flow-to-quote-archiving" bpmnElement="flow-to-quote-archiving">
+        <di:waypoint x="1390" y="360" />
+        <di:waypoint x="1440" y="360" />
+      </bpmndi:BPMNEdge>
+      
+      <bpmndi:BPMNEdge id="BPMNEdge_flow-quote-to-contract" bpmnElement="flow-quote-to-contract">
+        <di:waypoint x="1490" y="320" />
+        <di:waypoint x="1490" y="240" />
+        <di:waypoint x="1190" y="240" />
+        <di:waypoint x="1190" y="200" />
+      </bpmndi:BPMNEdge>
+      
+      <bpmndi:BPMNEdge id="BPMNEdge_flow-to-contract-signing" bpmnElement="flow-to-contract-signing">
+        <di:waypoint x="1240" y="160" />
+        <di:waypoint x="1290" y="160" />
+      </bpmndi:BPMNEdge>
+      
+      <bpmndi:BPMNEdge id="BPMNEdge_flow-to-contract-archiving" bpmnElement="flow-to-contract-archiving">
+        <di:waypoint x="1390" y="160" />
+        <di:waypoint x="1440" y="160" />
+      </bpmndi:BPMNEdge>
+      
+      <bpmndi:BPMNEdge id="BPMNEdge_flow-to-end" bpmnElement="flow-to-end">
+        <di:waypoint x="1540" y="160" />
+        <di:waypoint x="1592" y="160" />
+      </bpmndi:BPMNEdge>
+      
+    </bpmndi:BPMNPlane>
+  </bpmndi:BPMNDiagram>
+</bpmn:definitions>

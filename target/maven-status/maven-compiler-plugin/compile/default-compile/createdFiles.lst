@@ -1,0 +1,11 @@
+com/company/orchestrator/infrastructure/delegate/VisionArchiveDelegate.class
+com/company/orchestrator/infrastructure/delegate/SimulatorApiDelegate.class
+com/company/orchestrator/infrastructure/delegate/ESignUploadDelegate.class
+com/company/orchestrator/interfaces/rest/WorkflowController.class
+com/company/orchestrator/infrastructure/delegate/ProfitabilitySimulatorDelegate.class
+com/company/orchestrator/infrastructure/delegate/ESignUploadDelegate$2.class
+com/company/orchestrator/infrastructure/delegate/ESignUploadDelegate$1.class
+com/company/orchestrator/WorkflowOrchestratorApplication.class
+com/company/orchestrator/infrastructure/delegate/VisionArchiveDelegate$1.class
+com/company/orchestrator/infrastructure/delegate/ContractGenerationDelegate.class
+com/company/orchestrator/interfaces/rest/WorkflowController$FormSubmissionRequest.class
